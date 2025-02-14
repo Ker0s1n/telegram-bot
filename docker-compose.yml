@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: nabokov
+      POSTGRES_PASSWORD: svoboda4
+      POSTGRES_DB: telegram_bot
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  bot:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
+    ports:
+      - "8000:8000"
