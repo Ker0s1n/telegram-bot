@@ -10,6 +10,10 @@ wheels/
 .venv
 # Secrets
 /.env
+token.txt
+postgres_user.txt
+postgres_password.txt
+db_url.txt
 config.py
 # Databases
 *.db

@@ -1,6 +1,6 @@
 from datetime import datetime
+from pathlib import Path
 
-from config import Config
 from sqlalchemy import (
     Boolean,
     Column,
@@ -13,8 +13,12 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
+path = Path(__file__).parent.joinpath("db_url.txt")
+with path.open() as f:
+    DATABASE_URL = f.read().strip()
+
 Base = declarative_base()
-engine = create_engine(Config.DATABASE_URL)
+engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 
@@ -33,13 +37,17 @@ class Message(Base):
     text = Column(String)  # Первоначальный текст сообщения
     created_at = Column(DateTime, default=datetime)
     is_deleted = Column(Boolean, default=False)  # Флаг удалённого сообщения
-    is_edited = Column(Boolean, default=False)  # Флаг отредактированного сообщения
+    is_edited = Column(
+        Boolean, default=False
+    )  # Флаг отредактированного сообщения
 
     user = relationship("User", back_populates="messages")
     versions = relationship("MessageVersion", back_populates="original_message")
 
 
-User.messages = relationship("Message", order_by=Message.id, back_populates="user")
+User.messages = relationship(
+    "Message", order_by=Message.id, back_populates="user"
+)
 
 
 class MessageVersion(Base):
@@ -65,14 +73,20 @@ def get_or_create_user(session, user_id, username):
 
 
 def save_message(session, chat_id, user_id, text):
-    get_or_create_user(session, user_id, None)  # Имя пользователя можно обновить позже
+    get_or_create_user(
+        session, user_id, None
+    )  # Имя пользователя можно обновить позже
     message = Message(chat_id=chat_id, user_id=user_id, text=text)
     session.add(message)
     session.commit()
 
 
 def update_message(session, chat_id, user_id, new_text, edited_at):
-    message = session.query(Message).filter_by(chat_id=chat_id, user_id=user_id).first()
+    message = (
+        session.query(Message)
+        .filter_by(chat_id=chat_id, user_id=user_id)
+        .first()
+    )
     if message:
         message.is_edited = True  # Отмечаем сообщение как отредактированное
         version = MessageVersion(
@@ -83,7 +97,11 @@ def update_message(session, chat_id, user_id, new_text, edited_at):
 
 
 def mark_message_as_deleted(session, chat_id, user_id):
-    message = session.query(Message).filter_by(chat_id=chat_id, user_id=user_id).first()
+    message = (
+        session.query(Message)
+        .filter_by(chat_id=chat_id, user_id=user_id)
+        .first()
+    )
     if message:
         message.is_deleted = True
         session.commit()

@@ -1,14 +1,6 @@
 import logging
+from pathlib import Path
 
-from config import Config
-from database import (
-    Message,
-    MessageVersion,
-    Session,
-    mark_message_as_deleted,
-    save_message,
-    update_message,
-)
 from telegram import ChatMemberUpdated, Update
 from telegram.ext import (
     Application,
@@ -19,16 +11,34 @@ from telegram.ext import (
     filters,
 )
 
+from database import (
+    Message,
+    MessageVersion,
+    Session,
+    mark_message_as_deleted,
+    save_message,
+    update_message,
+)
+
+path = Path(__file__).parent.joinpath("token.txt")
+print(path)
+with path.open() as f:
+    TELEGRAM_BOT_TOKEN = f.read().strip()
+
+
 # Логирование
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
 
 async def handle_new_message(update: Update, context: CallbackContext) -> None:
     if update.effective_user.is_bot:
-        logger.info(f"Ignoring message from bot: {update.effective_user.username}")
+        logger.info(
+            f"Ignoring message from bot: {update.effective_user.username}"
+        )
         return
 
     chat_id = update.effective_chat.id
@@ -46,7 +56,9 @@ async def handle_new_message(update: Update, context: CallbackContext) -> None:
         session.close()
 
 
-async def handle_edited_message(update: Update, context: CallbackContext) -> None:
+async def handle_edited_message(
+    update: Update, context: CallbackContext
+) -> None:
     if update.effective_user.is_bot:
         logger.info(
             f"Ignoring edited message from bot: {update.effective_user.username}"
@@ -61,14 +73,18 @@ async def handle_edited_message(update: Update, context: CallbackContext) -> Non
     session = Session()
     try:
         update_message(session, chat_id, user_id, new_text, edited_at)
-        logger.info(f"Message edited by {update.effective_user.username}: {new_text}")
+        logger.info(
+            f"Message edited by {update.effective_user.username}: {new_text}"
+        )
     except Exception as e:
         logger.error(f"Error handling edited message: {e}")
     finally:
         session.close()
 
 
-async def handle_deleted_message(update: Update, context: CallbackContext) -> None:
+async def handle_deleted_message(
+    update: Update, context: CallbackContext
+) -> None:
     if update.effective_user.is_bot:
         logger.info(
             f"Ignoring deleted message from bot: {update.effective_user.username}"
@@ -81,7 +97,9 @@ async def handle_deleted_message(update: Update, context: CallbackContext) -> No
     session = Session()
     try:
         mark_message_as_deleted(session, chat_id, user_id)
-        logger.info(f"Message marked as deleted by {update.effective_user.username}")
+        logger.info(
+            f"Message marked as deleted by {update.effective_user.username}"
+        )
     except Exception as e:
         logger.error(f"Error handling deleted message: {e}")
     finally:
@@ -116,7 +134,9 @@ async def track_chat_members(update: Update, context: CallbackContext) -> None:
         )
 
 
-async def notify_admins(context: CallbackContext, chat_id: int, message: str) -> None:
+async def notify_admins(
+    context: CallbackContext, chat_id: int, message: str
+) -> None:
     try:
         # Получаем список администраторов чата
         admins = await context.bot.get_chat_administrators(chat_id)
@@ -124,10 +144,14 @@ async def notify_admins(context: CallbackContext, chat_id: int, message: str) ->
         for admin in admins:
             if not admin.user.is_bot:  # Исключаем ботов
                 try:
-                    await context.bot.send_message(chat_id=admin.user.id, text=message)
+                    await context.bot.send_message(
+                        chat_id=admin.user.id, text=message
+                    )
                     logger.info(f"Notified admin {admin.user.name}: {message}")
                 except Exception as e:
-                    logger.warning(f"Failed to notify admin {admin.user.name}: {e}")
+                    logger.warning(
+                        f"Failed to notify admin {admin.user.name}: {e}"
+                    )
     except Exception as e:
         logger.error(f"Failed to fetch administrators: {e}")
 
@@ -210,7 +234,9 @@ async def find_messages_by_hashtag(chat_id: int, hashtag: str) -> list:
         # Ищем первоначальные сообщения
         messages = (
             session.query(Message)
-            .filter(Message.chat_id == chat_id, Message.text.like(f"%{hashtag}%"))
+            .filter(
+                Message.chat_id == chat_id, Message.text.like(f"%{hashtag}%")
+            )
             .all()
         )
 
@@ -219,7 +245,8 @@ async def find_messages_by_hashtag(chat_id: int, hashtag: str) -> list:
             session.query(MessageVersion)
             .join(Message)
             .filter(
-                Message.chat_id == chat_id, MessageVersion.text.like(f"%{hashtag}%")
+                Message.chat_id == chat_id,
+                MessageVersion.text.like(f"%{hashtag}%"),
             )
             .all()
         )
@@ -227,7 +254,10 @@ async def find_messages_by_hashtag(chat_id: int, hashtag: str) -> list:
         results = []
         for msg in messages:
             results.append(
-                {"text": msg.text, "author": msg.user.username or msg.user.user_id}
+                {
+                    "text": msg.text,
+                    "author": msg.user.username or msg.user.user_id,
+                }
             )
 
         for version in versions:
@@ -248,7 +278,7 @@ async def find_messages_by_hashtag(chat_id: int, hashtag: str) -> list:
 
 
 def main() -> None:
-    application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Обработчик новых сообщений
     application.add_handler(

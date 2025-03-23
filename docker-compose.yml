@@ -1,12 +1,13 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:14
     restart: always
+    secrets:
+      - postgres_user
+      - postgres_password
     environment:
-      POSTGRES_USER: nabokov
-      POSTGRES_PASSWORD: svoboda4
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: telegram_bot
     volumes:
       - ./data:/var/lib/postgresql/data
@@ -18,7 +19,22 @@ services:
     restart: always
     depends_on:
       - db
+    secrets:
+      - telegram_bot_token
+      - postgres_user
+      - postgres_password
+      - database_url
     environment:
-      - TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      DATABASE_URL: /run/secrets/database_url
     ports:
       - "8000:8000"
+secrets:
+  telegram_bot_token:
+    file: ./token.txt
+  postgres_user:
+    file: ./postgres_user.txt
+  postgres_password:
+    file: ./postgres_password.txt
+  database_url:
+    file: ./db_url.txt
