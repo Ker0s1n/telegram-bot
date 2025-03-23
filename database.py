@@ -1,12 +1,13 @@
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
     ForeignKey,
-    Integer,
     String,
     create_engine,
 )
@@ -22,20 +23,34 @@ engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 
+@contextmanager
+def session_scope():
+    """Контекстный менеджер для работы с сессией базы данных."""
+    session = Session()
+    try:
+        yield session
+        session.commit()  # Коммит изменений после успешного выполнения
+    except Exception as e:
+        session.rollback()  # Откат изменений в случае ошибки
+        raise e  # Повторно выбрасываем исключение
+    finally:
+        session.close()  # Закрываем сессию
+
+
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, unique=True)
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, unique=True)
     username = Column(String)
 
 
 class Message(Base):
     __tablename__ = "messages"
-    id = Column(Integer, primary_key=True)
-    chat_id = Column(Integer)
-    user_id = Column(Integer, ForeignKey("users.user_id"))
+    id = Column(BigInteger, primary_key=True)
+    chat_id = Column(BigInteger)
+    user_id = Column(BigInteger, ForeignKey("users.user_id"))
     text = Column(String)  # Первоначальный текст сообщения
-    created_at = Column(DateTime, default=datetime)
+    created_at = Column(DateTime, default=datetime.utcnow)
     is_deleted = Column(Boolean, default=False)  # Флаг удалённого сообщения
     is_edited = Column(
         Boolean, default=False
@@ -52,10 +67,10 @@ User.messages = relationship(
 
 class MessageVersion(Base):
     __tablename__ = "message_versions"
-    id = Column(Integer, primary_key=True)
-    message_id = Column(Integer, ForeignKey("messages.id"))
+    id = Column(BigInteger, primary_key=True)
+    message_id = Column(BigInteger, ForeignKey("messages.id"))
     text = Column(String)  # Текст новой версии
-    edited_at = Column(DateTime, default=datetime)
+    edited_at = Column(DateTime, default=datetime.utcnow)
 
     original_message = relationship("Message", back_populates="versions")
 
@@ -68,40 +83,46 @@ def get_or_create_user(session, user_id, username):
     if not user:
         user = User(user_id=user_id, username=username)
         session.add(user)
-        session.commit()
     return user
 
 
 def save_message(session, chat_id, user_id, text):
-    get_or_create_user(
-        session, user_id, None
-    )  # Имя пользователя можно обновить позже
-    message = Message(chat_id=chat_id, user_id=user_id, text=text)
-    session.add(message)
-    session.commit()
+    try:
+        get_or_create_user(session, user_id, None)
+        message = Message(chat_id=chat_id, user_id=user_id, text=text)
+        session.add(message)
+    except Exception as e:
+        session.rollback()
+        raise e
 
 
 def update_message(session, chat_id, user_id, new_text, edited_at):
-    message = (
-        session.query(Message)
-        .filter_by(chat_id=chat_id, user_id=user_id)
-        .first()
-    )
-    if message:
-        message.is_edited = True  # Отмечаем сообщение как отредактированное
-        version = MessageVersion(
-            message_id=message.id, text=new_text, edited_at=edited_at
+    try:
+        message = (
+            session.query(Message)
+            .filter_by(chat_id=chat_id, user_id=user_id)
+            .first()
         )
-        session.add(version)
-        session.commit()
+        if message:
+            message.is_edited = True
+            version = MessageVersion(
+                message_id=message.id, text=new_text, edited_at=edited_at
+            )
+            session.add(version)
+    except Exception as e:
+        session.rollback()
+        raise e
 
 
 def mark_message_as_deleted(session, chat_id, user_id):
-    message = (
-        session.query(Message)
-        .filter_by(chat_id=chat_id, user_id=user_id)
-        .first()
-    )
-    if message:
-        message.is_deleted = True
-        session.commit()
+    try:
+        message = (
+            session.query(Message)
+            .filter_by(chat_id=chat_id, user_id=user_id)
+            .first()
+        )
+        if message:
+            message.is_deleted = True
+    except Exception as e:
+        session.rollback()
+        raise e
