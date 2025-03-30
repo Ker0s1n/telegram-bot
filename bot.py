@@ -45,16 +45,16 @@ async def handle_new_message(update: Update, context: CallbackContext) -> None:
         return
 
     chat_id = update.effective_chat.id
-    user_id = update.effective_user.id
-    username = update.effective_user.username
+    user = update.effective_user
     text = update.message.text
+    message_id = update.message.message_id
 
     try:
         with session_scope() as session:
-            save_message(session, chat_id, user_id, text)
-            logger.info(f"Saved message from {username}: {text}")
+            save_message(session, chat_id, user, text, message_id)
+            logger.info(f"Saved message from {user.username}: {text}")
     except Exception as e:
-        logger.error(f"Error saving message from {username}: {e}")
+        logger.error(f"Error saving message from {user.username}: {e}")
 
 
 async def handle_edited_message(
@@ -75,17 +75,19 @@ async def handle_edited_message(
     if user is None:
         logger.info("User information is None, skipping...")
         return
-    user_id = user.id
+    message_id = update.edited_message.message_id
     new_text = update.edited_message.text
     edited_at = update.edited_message.edit_date
 
     logger.info(
-        f"Handling edited message: chat_id={chat_id}, user_id={user_id}, new_text={new_text}"
+        f"Handling edited message: chat_id={chat_id}, user_id={user.id}, new_text={new_text}"
     )
 
     try:
         with session_scope() as session:
-            update_message(session, chat_id, user_id, new_text, edited_at)
+            update_message(
+                session, chat_id, user.id, message_id, new_text, edited_at
+            )
             logger.info(f"Message edited by {user.username}: {new_text}")
     except Exception as e:
         logger.error(f"Error handling edited message: {e}")
